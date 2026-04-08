@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Archive Helper — remove inbound links (parameters)",
+  "description": "Paste into Contentful App Action 'parametersSchema' (JSON Schema draft-04). Validates the parameters object on appActionCall.createWithResult.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "targetEntryId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Entry whose inbound references should be removed or previewed."
+    },
+    "dryRun": {
+      "type": "boolean",
+      "description": "When true, compute changes only; do not persist updates."
+    },
+    "publishStrategy": {
+      "type": "string",
+      "enum": ["none", "republish-if-published"],
+      "description": "none: leave publication state after draft update; republish-if-published: publish entries that were already published."
+    }
+  },
+  "required": ["targetEntryId"]
+}

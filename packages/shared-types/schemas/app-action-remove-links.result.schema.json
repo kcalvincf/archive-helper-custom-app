@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Archive Helper — remove inbound links (result)",
+  "description": "Paste into Contentful App Action 'resultSchema' (JSON Schema draft-04). Validates structured success payload on the App Action call.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "totalLinkedEntries": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "CMA total count of entries linking to the target (links_to_entry)."
+    },
+    "scanned": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Entries processed in this invocation."
+    },
+    "changed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Entries that were or would be updated (includes would-change in dry-run)."
+    },
+    "unchanged": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "failed": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entryId": { "type": "string", "minLength": 1 },
+          "contentTypeId": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["changed", "would-change", "unchanged", "failed"]
+          },
+          "removedCount": { "type": "integer", "minimum": 0 },
+          "message": { "type": "string" }
+        },
+        "required": ["entryId", "status", "removedCount"]
+      }
+    }
+  },
+  "required": [
+    "totalLinkedEntries",
+    "scanned",
+    "changed",
+    "unchanged",
+    "failed",
+    "results"
+  ]
+}

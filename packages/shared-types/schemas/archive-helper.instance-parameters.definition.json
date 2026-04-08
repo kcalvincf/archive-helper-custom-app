@@ -1,0 +1,16 @@
+[
+  {
+    "id": "appDefinitionId",
+    "name": "App definition ID",
+    "description": "ID of this app definition (same as in the app URL / API). Used with the App Action call API. Optional if you use Vite env VITE_CONTENTFUL_APP_DEFINITION_ID for local dev only.",
+    "type": "Symbol",
+    "required": false
+  },
+  {
+    "id": "appActionRemoveLinksId",
+    "name": "Remove links — App Action ID",
+    "description": "ID of the App Action that runs remove inbound links (parameters: targetEntryId, dryRun, publishStrategy). Create the action first, then paste its ID here.",
+    "type": "Symbol",
+    "required": false
+  }
+]
