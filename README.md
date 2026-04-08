@@ -124,6 +124,12 @@ See **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** for:
 - **Environment variables** and **local development**  
 - **Security** notes  
 
+## Netlify
+
+The repo includes **`netlify.toml`**: publish **`apps/sidebar/build`**, Functions directory **`netlify/functions`** (empty until you add handlers). Do **not** set Functions to **`apps/backend/dist`** — that folder is compiled Node/Express output; Netlify would treat each file as a serverless function and previously failed on `*.d.ts` (invalid names like `action-entry.d`).
+
+Backend declarations are emitted to **`apps/backend/dist-types/`** (not `dist/`) so any tooling that only scans `dist` sees **`.js` only**.
+
 ## Scripts (root)
 
 | Script | Description |

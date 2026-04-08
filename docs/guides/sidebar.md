@@ -90,6 +90,8 @@ Static output is in **`apps/sidebar/build/`** (Vite `outDir`). Deploy that folde
 - S3 + CloudFront, Netlify, Vercel (static), or any static host.
 - Set the app’s **Entry sidebar** URL to the deployed origin.
 
+**Netlify:** the repo root **`netlify.toml`** sets `publish = "apps/sidebar/build"` and `functions = "netlify/functions"`. Do not configure the Netlify UI to use **`apps/backend/dist`** as Functions (see [Backend how-to](./backend.md) § Netlify).
+
 Ensure **HTTPS** and correct **CORS** / caching headers per your host (Contentful loads the app in an iframe).
 
 ---

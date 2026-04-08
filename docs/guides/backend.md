@@ -183,7 +183,12 @@ npm run test -w @archive-helper/backend
 
 ---
 
-## 9. Troubleshooting
+## 9. Netlify / static hosts
+
+- **Do not** point Netlify **Functions** at `apps/backend/dist`. Use **`netlify/functions`** (see repo root `netlify.toml`). The backend `dist/` is for Node/Express or App Action executors elsewhere, not one-function-per-file on Netlify.
+- **Declarations:** TypeScript emits **`.d.ts`** to **`apps/backend/dist-types/`**, not next to `.js` in `dist/`, so folders that only package `dist` as functions do not pick up invalid function names from declaration files.
+
+## 10. Troubleshooting
 
 | Issue | What to check |
 |--------|----------------|
@@ -191,6 +196,7 @@ npm run test -w @archive-helper/backend
 | `401` / `403` from Contentful | Token scopes and space access |
 | Wrong space/environment | `spaceId` and `environmentId` in query/body match the space you expect |
 | Import errors in a fork | Run `npm run build` for `shared-types` and `utils` before building backend |
+| Netlify: invalid function names `*.d` | Remove `apps/backend/dist` as Functions directory; use `netlify.toml` in repo; clean rebuild so stale `.d.ts` are not in `dist` |
 
 For **App definition, App Actions, and Automations**, see [Configuration](../CONFIGURATION.md) and [Sidebar how-to](./sidebar.md).
 

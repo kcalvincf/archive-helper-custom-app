@@ -9,6 +9,7 @@
     "strict": true,
     "skipLibCheck": true,
     "declaration": true,
+    "declarationDir": "dist-types",
     "declarationMap": true,
     "sourceMap": true,
     "esModuleInterop": true,

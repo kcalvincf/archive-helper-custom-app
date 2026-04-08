@@ -1,0 +1,11 @@
+# Static site: sidebar SPA. Do not use apps/backend/dist as Functions — that folder is the
+# compiled Express/library output; Netlify would treat every .js as a serverless function.
+
+[build]
+  command = "npm ci && npm run build"
+  publish = "apps/sidebar/build"
+
+# Dedicated Netlify Functions only (add handlers under netlify/functions/ when needed).
+# Overrides UI settings that pointed at apps/backend/dist and picked up *.d.ts as invalid names.
+[functions]
+  directory = "netlify/functions"
