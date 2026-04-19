@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Archive Helper — get incoming links count (parameters)",
+  "description": "Paste into Contentful App Action 'parametersSchema' (JSON Schema draft-04). Space and environment are supplied by the host; body typically only needs entryId.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "entryId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Target entry id — count entries with inbound links to this entry."
+    },
+    "previewSize": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 25,
+      "description": "Optional number of sample linking entries to include in the result (0 = count only)."
+    }
+  },
+  "required": ["entryId"]
+}

@@ -1,0 +1,13 @@
+{
+  "functions": [
+    {
+      "id": "removeIncomingLinks",
+      "name": "Remove incoming links",
+      "description": "Duplicate of repo root contentful-app-manifest.json (paths are root-relative).",
+      "path": "functions/removeIncomingLinks.js",
+      "entryFile": "functions/removeIncomingLinks.ts",
+      "allowNetworks": [],
+      "accepts": ["appaction.call"]
+    }
+  ]
+}

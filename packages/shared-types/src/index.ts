@@ -10,63 +10,24 @@ export type EntryUnlinkResult = {
   message?: string;
 };
 
-/** Registered App Action parameters (sidebar + Automations). */
-export type AppActionRemoveLinksInput = {
-  targetEntryId: string;
-  dryRun?: boolean;
-  publishStrategy?: "none" | "republish-if-published";
-};
-
-/** App Action / invoke response (matches Automation expectations). */
-export type AppActionRemoveLinksOutput = {
-  totalLinkedEntries: number;
-  scanned: number;
-  changed: number;
-  unchanged: number;
-  failed: number;
-  results: EntryUnlinkResult[];
-};
-
-/** Minimal count shape for sidebar display. */
-export type InboundLinkCountResult = {
-  entryId: string;
-  totalLinkedEntries: number;
-};
-
 export type PublishStrategy = "none" | "republish-if-published";
 export type LocaleMode = "all" | "defaultOnly";
 
-/** Full service / HTTP body (space + environment + optional batching). */
-export type RemoveIncomingLinksInput = {
-  spaceId: string;
-  environmentId: string;
-  targetEntryId: string;
-  dryRun?: boolean;
-  publishStrategy?: PublishStrategy;
-  localeMode?: LocaleMode;
-  limit?: number;
-  skip?: number;
-  contentTypeFilter?: string[];
-};
+/** Default batch size when no action param or installation default is set. */
+export const DEFAULT_UNLINK_BATCH_SIZE = 20;
+/** Hard cap per App Action invocation (abuse / timeout guard). */
+export const MAX_UNLINK_BATCH_SIZE = 100;
 
-export type RemoveIncomingLinksResult = {
-  targetEntryId: string;
-  totalLinkedEntries: number;
-  scanned: number;
-  changed: number;
-  unchanged: number;
-  failed: number;
-  results: EntryUnlinkResult[];
-};
-
-export type GetLinkedEntryCountInput = {
+/** Count-only App Action / HTTP (space + environment usually from context). */
+export type GetIncomingLinksCountActionInput = {
   spaceId: string;
   environmentId: string;
   entryId: string;
+  /** When set, include up to this many sample linking entries in `preview` (capped in service). */
   previewSize?: number;
 };
 
-export type GetLinkedEntryCountResult = {
+export type GetIncomingLinksCountActionResult = {
   entryId: string;
   totalLinkedEntries: number;
   preview?: Array<{
@@ -74,7 +35,60 @@ export type GetLinkedEntryCountResult = {
     contentTypeId?: string;
     locale?: string;
   }>;
+};
+
+/** @deprecated Use {@link GetIncomingLinksCountActionInput} */
+export type GetLinkedEntryCountInput = GetIncomingLinksCountActionInput;
+
+/** @deprecated Use {@link GetIncomingLinksCountActionResult} */
+export type GetLinkedEntryCountResult = GetIncomingLinksCountActionResult & {
   request?: { limit: number; skip: number };
+};
+
+/** Registered App Action parameters for batched unlink (sidebar + Automations). */
+export type AppActionRemoveLinksInput = {
+  targetEntryId: string;
+  batchSize?: number;
+  skip?: number;
+  dryRun?: boolean;
+  publishStrategy?: PublishStrategy;
+  localeMode?: LocaleMode;
+  contentTypeFilter?: string[];
+};
+
+/**
+ * Batched unlink result — same shape returned from App Action, HTTP, and domain service.
+ * Callers use `hasMore` + `nextSkip` to continue until all inbound links are processed.
+ */
+export type RemoveIncomingLinksResult = {
+  targetEntryId: string;
+  totalLinkedEntries: number;
+  batchSizeUsed: number;
+  skipUsed: number;
+  processedInThisBatch: number;
+  nextSkip: number;
+  hasMore: boolean;
+  remainingEstimate: number;
+  changed: number;
+  unchanged: number;
+  failed: number;
+  results: EntryUnlinkResult[];
+};
+
+/** App Action response for remove incoming links (full batch metadata for orchestration). */
+export type AppActionRemoveLinksOutput = RemoveIncomingLinksResult;
+
+/** Full service / HTTP body (space + environment + batching). */
+export type RemoveIncomingLinksInput = {
+  spaceId: string;
+  environmentId: string;
+  targetEntryId: string;
+  batchSize?: number;
+  skip?: number;
+  dryRun?: boolean;
+  publishStrategy?: PublishStrategy;
+  localeMode?: LocaleMode;
+  contentTypeFilter?: string[];
 };
 
 export type ContentfulEntryLink = {
@@ -94,6 +108,8 @@ export type RichTextNode = {
 
 export type ContentfulConfig = {
   accessToken: string;
+  /** Fallback when request body omits `batchSize` (standalone server only). */
+  defaultUnlinkBatchSize?: number;
 };
 
 /** HTTP + App invoke: merge App Action fields with space context. */
@@ -102,8 +118,18 @@ export type InvokeRemoveLinksBody = AppActionRemoveLinksInput & {
   environmentId: string;
 };
 
+/** @deprecated Use {@link GetIncomingLinksCountActionResult} */
+export type InboundLinkCountResult = {
+  entryId: string;
+  totalLinkedEntries: number;
+};
+
 export type {
   ArchiveHelperInstanceParameters,
+  ArchiveHelperInstallationParameters,
   ContentfulParameterDefinition,
 } from "./parameters.js";
-export { ARCHIVE_HELPER_INSTANCE_PARAMETER_DEFINITIONS } from "./parameters.js";
+export {
+  ARCHIVE_HELPER_INSTANCE_PARAMETER_DEFINITIONS,
+  ARCHIVE_HELPER_INSTALLATION_PARAMETER_DEFINITIONS,
+} from "./parameters.js";

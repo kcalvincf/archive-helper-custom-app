@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-04/schema#",
+  "title": "Archive Helper — get incoming links count (result)",
+  "description": "Paste into Contentful App Action 'resultSchema' (JSON Schema draft-04).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "entryId": { "type": "string", "minLength": 1 },
+    "totalLinkedEntries": { "type": "integer", "minimum": 0 },
+    "preview": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "entryId": { "type": "string" },
+          "contentTypeId": { "type": "string" },
+          "locale": { "type": "string" }
+        },
+        "required": ["entryId"]
+      }
+    }
+  },
+  "required": ["entryId", "totalLinkedEntries"]
+}

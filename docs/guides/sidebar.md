@@ -1,13 +1,13 @@
 # How to: Sidebar (`apps/sidebar`)
 
-This guide explains how to run, configure, and deploy the **Entry Sidebar** React UI: inbound link count, preview unlink, and remove links via the **App Action** API.
+This guide explains how to run, configure, and deploy the **Entry Sidebar** React UI: inbound link count, **batched** preview unlink, and **batched** remove via App Actions.
 
 ## What you get
 
 - **Location:** `LOCATION_ENTRY_SIDEBAR` (entry sidebar in the Contentful web app).
-- **Main UI:** `src/locations/EntrySidebar.tsx` — loads count with CMA, runs unlink via `sdk.cma.appActionCall.createWithResult`.
+- **Main UI:** `src/locations/IncomingLinksSidebar.tsx` — optional **count** App Action or CMA; **remove** via `sdk.cma.appActionCall.createWithResult` with `skip` / `batchSize`.
 - **Stack:** Vite, React 18, `@contentful/app-sdk`, `@contentful/f36-components`.
-- **Types:** `@archive-helper/shared-types` for `AppActionRemoveLinksOutput`.
+- **Types:** `@archive-helper/shared-types` (`RemoveIncomingLinksResult`, etc.).
 
 ---
 
@@ -15,24 +15,26 @@ This guide explains how to run, configure, and deploy the **Entry Sidebar** Reac
 
 - Node.js 18.18+
 - A **Contentful app** with the **Entry sidebar** location enabled and pointing at your hosted (or tunneled) sidebar URL.
-- An **App Action** registered on that app with parameters compatible with the sidebar (see below).
+- **App Actions** registered: **`removeIncomingLinks`** (required for unlink); **`getIncomingLinksCount`** (optional — otherwise CMA count).
 - Monorepo dependencies installed from root: `npm install`, and `npm run build -w @archive-helper/shared-types` (sidebar imports that package).
 
 ---
 
 ## 2. Parameter definitions (Contentful UI)
 
-- **Instance parameters** (entry sidebar location): use **`packages/shared-types/schemas/archive-helper.instance-parameters.definition.json`** so `id` values match `ArchiveHelperInstanceParameters` (`appDefinitionId`, `appActionRemoveLinksId`).
-- **App Action** in Contentful: paste **`app-action-remove-links.parameters.schema.json`** and **`app-action-remove-links.result.schema.json`** into **parametersSchema** / **resultSchema** (draft-04). See `packages/shared-types/schemas/README.md`.
+- **Instance parameters:** **`archive-helper.instance-parameters.definition.json`** (`appDefinitionId`, `appActionGetIncomingLinksCountId`, `appActionRemoveLinksId`, `republishAfterUnlink`, `defaultUnlinkBatchSize`).
+- **App Actions:** schemas under **`packages/shared-types/schemas/`** — count + batched remove (see **README.md** in that folder).
 
 ## 3. Configure App Action IDs
 
 The sidebar must know **which App Action** to call. It resolves IDs in this order:
 
-1. **Instance / installation parameters** (best for production), from the app definition in Contentful:
+1. **Instance parameters** (entry sidebar), from the app definition in Contentful:
    - `appDefinitionId`
+   - `appActionGetIncomingLinksCountId` (optional)
    - `appActionRemoveLinksId`
-2. **Vite environment variables** (handy for local dev), in `apps/sidebar/.env`:
+   - `republishAfterUnlink`, `defaultUnlinkBatchSize`
+2. **Vite environment variables**, in `apps/sidebar/.env`:
 
    ```bash
    cp apps/sidebar/.env.example apps/sidebar/.env
@@ -41,7 +43,10 @@ The sidebar must know **which App Action** to call. It resolves IDs in this orde
    | Variable | Purpose |
    |----------|---------|
    | `VITE_CONTENTFUL_APP_DEFINITION_ID` | Your app definition ID (from Contentful UI or API). |
-   | `VITE_CONTENTFUL_APP_ACTION_REMOVE_LINKS_ID` | The App Action ID for “remove inbound links”. |
+   | `VITE_CONTENTFUL_APP_ACTION_REMOVE_LINKS_ID` | Batched **remove incoming links** action. |
+   | `VITE_CONTENTFUL_APP_ACTION_GET_INCOMING_LINKS_COUNT_ID` | Optional count action (else CMA). |
+   | `VITE_DEFAULT_UNLINK_BATCH_SIZE` | Optional default batch size (1–100). |
+   | `VITE_CONTENTFUL_REPUBLISH_AFTER_UNLINK` | Optional `true` → `republish-if-published` on remove batch. |
 
 After changing `.env`, restart `npm run dev` (Vite reads env at startup).
 
@@ -90,7 +95,7 @@ Static output is in **`apps/sidebar/build/`** (Vite `outDir`). Deploy that folde
 - S3 + CloudFront, Netlify, Vercel (static), or any static host.
 - Set the app’s **Entry sidebar** URL to the deployed origin.
 
-**Netlify:** the repo root **`netlify.toml`** sets `publish = "apps/sidebar/build"` and `functions = "netlify/functions"`. Do not configure the Netlify UI to use **`apps/backend/dist`** as Functions (see [Backend how-to](./backend.md) § Netlify).
+**Netlify:** the repo root **`netlify.toml`** sets `publish = "apps/sidebar/build"` and `functions = "netlify/functions"`. Do not point Netlify Functions at the standalone backend `dist` folder (see [Backend how-to](./backend.md)).
 
 Ensure **HTTPS** and correct **CORS** / caching headers per your host (Contentful loads the app in an iframe).
 
@@ -100,11 +105,12 @@ Ensure **HTTPS** and correct **CORS** / caching headers per your host (Contentfu
 
 | UI | Behavior |
 |----|----------|
-| **Incoming links** | On load: `sdk.cma.entry.getMany` with `query: { links_to_entry: <current entry id>, limit: 1 }`, displays **`total`**. |
-| **Preview unlink impact** | Calls App Action with `dryRun: true`, `publishStrategy: "none"`. |
-| **Remove links** | Calls App Action with `dryRun: false`, `publishStrategy: "republish-if-published"`. Disabled when count is `0`. |
-| **While running** | Buttons disabled + “Running App Action…” spinner. |
-| **After run** | Shows summary note and up to 12 per-entry lines; notifier toasts on success/error. |
+| **Incoming links** | On load: optional **count** App Action, else CMA `links_to_entry` + `limit: 1` + **`total`**. |
+| **Batch size** | Editable field (clamped 1–100); initialized from instance / `VITE_DEFAULT_UNLINK_BATCH_SIZE` / 20. |
+| **Preview batch** | `dryRun: true`, `publishStrategy: "none"`, current **`skip`** and **`batchSize`**. |
+| **Remove one batch** | `dryRun: false`, optional republish per instance/env; passes **`skip`** / **`batchSize`**. On success, advances internal **`skip`** to **`nextSkip`** when **`hasMore`**, else resets to 0. |
+| **Reset batch progress** | Sets **`skip`** back to 0. |
+| **After run** | Shows `hasMore`, `nextSkip`, `remainingEstimate`, per-entry lines (up to 12). |
 
 Entry ID comes from `sdk.entry.getSys().id`. Space/environment from `sdk.ids.space` and `sdk.ids.environment`.
 
@@ -112,13 +118,15 @@ Entry ID comes from `sdk.entry.getSys().id`. Space/environment from `sdk.ids.spa
 
 ## 7. App Action contract (must match Contentful)
 
-The executor must accept **parameters** (names should match what you register in the App Action definition):
+**Remove** action parameters include:
 
-- `targetEntryId` (string)
-- `dryRun` (boolean, optional)
-- `publishStrategy` (`"none"` | `"republish-if-published"`, optional)
+- `targetEntryId` (string, required)
+- `batchSize`, `skip` (optional; defaults resolved server-side)
+- `dryRun`, `publishStrategy`, `localeMode`, `contentTypeFilter` (optional)
 
-The executor should return JSON matching **`AppActionRemoveLinksOutput`** (`totalLinkedEntries`, `scanned`, `changed`, `unchanged`, `failed`, `results`).
+**Count** action: `entryId` (required); optional `previewSize`.
+
+The executor should return JSON matching **`RemoveIncomingLinksResult`** / **`AppActionRemoveLinksOutput`** (batched metadata: `hasMore`, `nextSkip`, `processedInThisBatch`, plus `changed`, `unchanged`, `failed`, `results`).
 
 Implement that with a **Contentful Function**, or proxy to **`POST /app-actions/remove-incoming-links`** on this repo’s backend — see [Backend how-to](./backend.md) and [Configuration](../CONFIGURATION.md).
 
@@ -129,7 +137,7 @@ Implement that with a **Contentful Function**, or proxy to **`POST /app-actions/
 | Issue | What to check |
 |--------|----------------|
 | “Missing App Action configuration” | Set instance params (`appActionRemoveLinksId`, `appDefinitionId`) or both `VITE_*` vars in `.env`. |
-| App Action fails / wrong result | Parameter names and types in Contentful match §6; executor returns `AppActionRemoveLinksOutput`. |
+| App Action fails / wrong result | Parameter names and types in Contentful match section 6; executor returns `AppActionRemoveLinksOutput`. |
 | Count fails or stays loading | User/token can read entries; `links_to_entry` supported for your environment. |
 | Blank iframe | Sidebar URL HTTPS, app installed, correct location (entry sidebar). |
 | Stale env vars | Restart Vite after editing `.env`. |

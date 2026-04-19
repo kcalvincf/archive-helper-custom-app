@@ -7,10 +7,31 @@
     "required": false
   },
   {
+    "id": "appActionGetIncomingLinksCountId",
+    "name": "Count inbound links — App Action ID",
+    "description": "Optional. App Action ID for getIncomingLinksCount. If unset, the sidebar queries CMA directly for the total.",
+    "type": "Symbol",
+    "required": false
+  },
+  {
     "id": "appActionRemoveLinksId",
     "name": "Remove links — App Action ID",
-    "description": "ID of the App Action that runs remove inbound links (parameters: targetEntryId, dryRun, publishStrategy). Create the action first, then paste its ID here.",
+    "description": "ID of the batched App Action: remove inbound links (targetEntryId, batchSize, skip, dryRun, publishStrategy, …).",
     "type": "Symbol",
+    "required": false
+  },
+  {
+    "id": "republishAfterUnlink",
+    "name": "Republish after unlink",
+    "description": "When enabled, entries that were already published are published again after inbound links are removed. When disabled (default), changes are saved as drafts only.",
+    "type": "Boolean",
+    "required": false
+  },
+  {
+    "id": "defaultUnlinkBatchSize",
+    "name": "Default unlink batch size",
+    "description": "Default number of linking entries to process per Remove links run in the sidebar (1–100). Falls back to 20 if unset.",
+    "type": "Number",
     "required": false
   }
 ]

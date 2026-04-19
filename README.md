@@ -1,14 +1,65 @@
 # Contentful Archive Helper
 
-Production-oriented **full-stack Contentful app** to safely work with heavily referenced (“popular”) entries: show **inbound link counts** in the **entry sidebar**, run **dry-run / execute unlink** via an **App Action**, and reuse the same logic from **Automations**.
+Production-oriented **full-stack Contentful app** for **heavily referenced entries**: fast **inbound link counts**, **batched unlink** (one batch per App Action invocation to avoid function timeouts), and shared **domain logic** used by the **sidebar**, **standalone HTTP API**, and **Contentful Functions**.
+
+## Why two App Actions?
+
+| Action | Role |
+|--------|------|
+| **`getIncomingLinksCount`** | Lightweight: `links_to_entry` with `limit: 1` and read **`total`**. Safe to run in Automations before any writes. |
+| **`removeIncomingLinks`** | Heavy: fetches at most **`batchSize`** linking entries, strips references, updates entries, optional republish. **One batch per call** — repeat until **`hasMore === false`**. |
+
+Splitting count and unlink keeps workflows fast and avoids exceeding **Contentful Function / App Action** time limits when thousands of entries link to one target.
+
+## Why batched unlinking?
+
+In large spaces, **one** invocation that scans and updates every inbound link can **timeout**. This app processes **at most `batchSize` (default 20, max 100)** linking entries per run and returns **`nextSkip`**, **`hasMore`**, and **`remainingEstimate`** so callers (sidebar, Automations, or custom code) can **loop** until done.
+
+### Batch execution model
+
+- **`skip`** — Offset into the CMA `links_to_entry` ordering for the target entry.
+- **`batchSize`** — Maximum number of linking entries **requested from CMA** in this invocation (after clamping).
+- **`nextSkip`** — `skip +` (number of items returned in the current CMA page). Advance to this value for the next call.
+- **`hasMore`** — `true` if `nextSkip < totalLinkedEntries`.
+- **`processedInThisBatch`** — Linking entries that matched **`contentTypeFilter`** (if any) and were evaluated for unlink.
+
+### Intended automation flow
+
+1. Call **`getIncomingLinksCount`** → decide if work is needed.  
+2. Loop: call **`removeIncomingLinks`** with `skip` (start at `0`), then `nextSkip` from the previous result, until **`hasMore === false`**.  
+3. Proceed with archive / delete when no inbound links remain.
+
+**Programmatic helper** (scripts / custom servers, not inside a short-lived Function):
+
+```typescript
+import {
+  runRemoveIncomingLinksUntilComplete,
+  removeIncomingLinksActionHandler,
+} from "@archive-helper/domain";
+
+// executeBatch = (input) => removeIncomingLinksActionHandler(input, services.unlink, options);
+const { rounds, final } = await runRemoveIncomingLinksUntilComplete(executeBatch, {
+  spaceId,
+  environmentId,
+  targetEntryId,
+  batchSize: 20,
+});
+```
+
+### Batch size precedence
+
+1. **Explicit** `batchSize` on the App Action / HTTP body (if valid, clamped to 1–100).  
+2. **Installation** parameter `defaultUnlinkBatchSize` (Contentful Functions: `context.appInstallationParameters`).  
+3. **Standalone server:** environment variable **`DEFAULT_UNLINK_BATCH_SIZE`**.  
+4. Hardcoded fallback **`20`** (`DEFAULT_UNLINK_BATCH_SIZE` in `@archive-helper/shared-types`).
 
 ## How-to guides
 
 | Guide | What it covers |
 |--------|----------------|
-| **[Backend](docs/guides/backend.md)** | Env vars, `npm run dev` / `start`, HTTP endpoints with `curl` examples, library usage, tests, troubleshooting |
-| **[Sidebar](docs/guides/sidebar.md)** | Vite dev server, `VITE_*` and instance parameters, hosting the `build/`, `EntrySidebar` behavior, App Action contract, troubleshooting |
-| **[Configuration](docs/CONFIGURATION.md)** | End-to-end wiring: Contentful app, App Actions, Automations, security |
+| **[Backend (standalone)](docs/guides/backend.md)** | Express app, env vars, HTTP endpoints, tests |
+| **[Sidebar](docs/guides/sidebar.md)** | Vite, `VITE_*`, instance parameters, App Actions |
+| **[Configuration](docs/CONFIGURATION.md)** | App definition, both App Actions, Automations |
 
 ## Architecture
 
@@ -19,62 +70,60 @@ flowchart LR
   end
   subgraph cf [Contentful]
     CMA[CMA APIs]
-    AA[App Action executor]
+    AA[App Action executors]
   end
-  subgraph be [apps/backend optional]
+  subgraph be [apps/backend-standalone]
     API[Express HTTP]
-    SVC[Unlink services]
+  end
+  subgraph fn [apps/backend-functions]
+    F1[getIncomingLinksCount]
+    F2[removeIncomingLinks]
   end
   subgraph pkg [packages]
+    DOM[domain]
+    ADP[contentful-adapters]
     ST[shared-types]
-    U[utils]
+    U[shared-utils]
   end
-  UI -->|entry.getMany links_to_entry| CMA
-  UI -->|appActionCall.createWithResult| AA
-  AA --> SVC
-  API --> SVC
-  SVC --> U
+  UI -->|optional count App Action or CMA| CMA
+  UI -->|appActionCall| AA
+  AA --> F1
+  AA --> F2
+  F1 --> DOM
+  F2 --> DOM
+  API --> DOM
+  DOM --> ADP
+  DOM --> U
   UI --- ST
   API --- ST
-  SVC --- ST
 ```
 
 | Piece | Responsibility |
-|--------|------------------|
-| **`apps/sidebar`** | React + App SDK + Forma 36, `LOCATION_ENTRY_SIDEBAR`: load **count** with `sdk.cma.entry.getMany({ query: { links_to_entry, limit: 1 } })`, **preview/execute** with `sdk.cma.appActionCall.createWithResult` |
-| **`apps/backend`** | TypeScript services: inbound count, recursive unlink, optional **Express** routes; **`removeIncomingLinksAppAction`** maps to the App Action response contract |
-| **`packages/shared-types`** | Contracts + **`schemas/`** (JSON Schema draft-04 for App Action; instance-parameter JSON for sidebar). Types: `ArchiveHelperInstanceParameters`, `AppActionRemoveLinksInput` / `AppActionRemoveLinksOutput`, etc. |
-| **`packages/utils`** | Generic recursive unlink (`removeTargetReferencesDeep`) + link/Rich Text detection — **no hardcoded field names** |
-
-## Capability review (vs product goals)
-
-| Goal | Where it’s implemented |
-|------|-------------------------|
-| Incoming link count in entry sidebar | `EntrySidebar.tsx` → `sdk.cma.entry.getMany` + `total` |
-| Button: preview unlink (dry run) | `EntrySidebar.tsx` → App Action with `dryRun: true` |
-| Button: remove links | `EntrySidebar.tsx` → App Action with `dryRun: false`, `publishStrategy: "republish-if-published"` |
-| Same unlink for Automations | Register App Action; executor runs `removeIncomingLinksAppAction` or HTTP `POST /app-actions/remove-incoming-links` |
-| Shared contracts | `packages/shared-types` imported by sidebar + backend |
-| Tests | `packages/utils` (recursive removal), `apps/backend` (services, handlers, action validation) |
+|--------|----------------|
+| **`apps/sidebar`** | Count (App Action or CMA), **Preview batch** / **Remove one batch**, batch size UI, progress from `hasMore` / `nextSkip` |
+| **`apps/backend-standalone`** | Express: `GET /linked-entry-count`, `POST /remove-incoming-links`, `POST /app-actions/remove-incoming-links` |
+| **`apps/backend-functions`** | Thin handlers: **`getIncomingLinksCountAction`**, **`removeIncomingLinksAction`** |
+| **`packages/domain`** | **`InboundReferenceService`**, **`RemoveIncomingLinksBatchService`**, validation, orchestration helper |
+| **`packages/contentful-adapters`** | **`ContentRepository`** + **`CmaContentRepository`** (standalone + functions aliases) |
+| **`packages/shared-utils`** | **`removeTargetReferencesDeep`**, link / Rich Text helpers |
+| **`packages/shared-types`** | Types + **`schemas/`** (JSON Schema draft-04 for both App Actions; instance + installation parameters) |
 
 ## Repository layout
 
 ```
 contentful-archive-helper/
   apps/
-    backend/          # Node API + unlink engine
-    sidebar/          # Vite + React sidebar UI
+    backend-standalone/   # Express HTTP API
+    backend-functions/    # Contentful Function sources (compiled to dist/)
+    sidebar/              # Vite + React entry sidebar
   packages/
-    shared-types/     # Shared types + schemas/ (JSON Schema for App Action; instance params)
-    utils/            # Recursive unlink utilities
+    domain/
+    contentful-adapters/
+    shared-types/
+    shared-utils/
   docs/
-    CONFIGURATION.md      # End-to-end wiring (apps, actions, automations)
-    guides/
-      backend.md          # Backend how-to
-      sidebar.md          # Sidebar how-to
+  contentful-app-manifest.json
 ```
-
-> **Note:** The earlier standalone folder `contentful-unlink-backend` is superseded by `apps/backend` + packages in this monorepo.
 
 ## Quick start
 
@@ -84,61 +133,70 @@ npm run build
 npm test
 ```
 
-- **Backend dev:** `npm run dev -w @archive-helper/backend` (set `apps/backend/.env`).
-- **Sidebar dev:** `npm run dev -w @archive-helper/sidebar` — details in [docs/guides/sidebar.md](docs/guides/sidebar.md).
+- **Standalone backend:** `npm run dev:backend` — set `CONTENTFUL_MANAGEMENT_TOKEN`; optional `DEFAULT_UNLINK_BATCH_SIZE`.  
+- **Sidebar:** `npm run dev:sidebar` — see [docs/guides/sidebar.md](docs/guides/sidebar.md).  
+- **Upload Functions:** `npm run build:contentful` then `contentful-app-scripts upload` (see below).
 
-## HTTP API (backend)
-
-When running `apps/backend`, useful routes include:
+## HTTP API (standalone backend)
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET` | `/health` | Liveness |
-| `GET` | `/linked-entry-count` | Count + optional preview (token auth via env for server-side callers) |
-| `POST` | `/remove-incoming-links` | Full `RemoveIncomingLinksResult` including `targetEntryId` |
-| `POST` | `/app-actions/remove-incoming-links` | Body: `InvokeRemoveLinksBody` → **`AppActionRemoveLinksOutput`** (for webhook-style executors) |
+| `GET` | `/linked-entry-count` | `GetIncomingLinksCountActionResult` (`spaceId`, `environmentId`, `entryId` query params) |
+| `POST` | `/remove-incoming-links` | Body: `RemoveIncomingLinksInput` → **`RemoveIncomingLinksResult`** (one batch) |
+| `POST` | `/app-actions/remove-incoming-links` | Body: `InvokeRemoveLinksBody` → same batched result |
 
-## App Action contract
+## App Action contracts
 
-**Input parameters** (sidebar + Automations):
+Schemas live in **`packages/shared-types/schemas/`** (draft-04 for Contentful UI).
 
-- `targetEntryId` (string, required)
-- `dryRun` (boolean, optional)
-- `publishStrategy` (`"none"` \| `"republish-if-published"`, optional)
+**`removeIncomingLinks` output** (`AppActionRemoveLinksOutput` = `RemoveIncomingLinksResult`): includes `targetEntryId`, `totalLinkedEntries`, `batchSizeUsed`, `skipUsed`, `processedInThisBatch`, `nextSkip`, `hasMore`, `remainingEstimate`, `changed`, `unchanged`, `failed`, `results`.
 
-**Output** (`AppActionRemoveLinksOutput`):
+Types: **`@archive-helper/shared-types`**.
 
-- `totalLinkedEntries`, `scanned`, `changed`, `unchanged`, `failed`, `results: EntryUnlinkResult[]`
+## Shared service usage (mandatory pattern)
 
-Types live in **`@archive-helper/shared-types`**.
+```typescript
+const countService = new InboundReferenceService(contentRepository, logger);
+const countResult = await countService.getCount(input);
 
-## Configuration (detailed)
+const unlinkService = new RemoveIncomingLinksBatchService(contentRepository, logger);
+const unlinkResult = await unlinkService.execute(validatedRemoveInput);
+```
 
-Step-by-step component guides: **[Backend](./docs/guides/backend.md)** · **[Sidebar](./docs/guides/sidebar.md)**.
+Adapters resolve **`batchSize`** via **`validateRemoveIncomingLinksInput`** before calling **`execute`**.
 
-See **[docs/CONFIGURATION.md](./docs/CONFIGURATION.md)** for:
+## Contentful app bundle (root manifest + `build/`)
 
-- How the **sidebar** talks to CMA vs App Actions  
-- How to **register the app** and **Entry sidebar** location  
-- How to **register the App Action** and wire **Automations**  
-- **Environment variables** and **local development**  
-- **Security** notes  
+| File | Role |
+|------|------|
+| **`contentful-app-manifest.json`** | Two functions: **`getIncomingLinksCount`**, **`removeIncomingLinks`** → `apps/backend-functions/dist/*.js` |
+| **`contentful.esbuild.config.cjs`** | Browser target + Node polyfills for the Functions runtime |
+
+```bash
+npm run build:contentful
+```
+
+This builds packages, the **sidebar** SPA, bundles **Functions** into `build/`, then copies **`index.html`** and **`assets/`** into `build/` (Contentful rejects uploads without a root `index.html`).
+
+```bash
+npx contentful-app-scripts --ci upload --bundle-dir ./build --organization-id <orgId> --definition-id <appDefinitionId> --token <CMA_token>
+```
 
 ## Netlify
 
-The repo includes **`netlify.toml`**: publish **`apps/sidebar/build`**, Functions directory **`netlify/functions`** (empty until you add handlers). Do **not** set Functions to **`apps/backend/dist`** — that folder is compiled Node/Express output; Netlify would treat each file as a serverless function and previously failed on `*.d.ts` (invalid names like `action-entry.d`).
-
-Backend declarations are emitted to **`apps/backend/dist-types/`** (not `dist/`) so any tooling that only scans `dist` sees **`.js` only**.
+**`netlify.toml`**: publish **`apps/sidebar/build`**. Functions: **`netlify/functions`**. Do not point Netlify Functions at compiled backend output.
 
 ## Scripts (root)
 
 | Script | Description |
 |--------|-------------|
-| `npm run build` | Build all workspaces |
-| `npm run build:packages` | `shared-types` + `utils` only |
-| `npm test` | Utils + backend tests |
-| `npm run dev:backend` | Backend dev server |
-| `npm run dev:sidebar` | Sidebar Vite dev server |
+| `npm run build` | All workspaces |
+| `npm run build:packages` | `shared-types`, `shared-utils`, `contentful-adapters`, `domain` |
+| `npm run build:contentful` | Packages + Contentful Functions → **`build/`** |
+| `npm test` | Vitest in packages + apps |
+| `npm run dev:backend` | Standalone Express |
+| `npm run dev:sidebar` | Sidebar Vite |
 
 ## License
 

@@ -1,21 +1,21 @@
-# How to: Backend (`apps/backend`)
+# How to: Backend (`apps/backend-standalone`)
 
-This guide explains how to run, configure, and use the **Archive Helper backend**: the TypeScript unlink engine and optional **Express** HTTP API.
+This guide explains how to run and use the **standalone Express** API that wraps the same **`@archive-helper/domain`** services as Contentful Functions.
 
 ## What you get
 
-- **Services:** inbound link counting (`InboundReferenceService`), full unlink flow (`RemoveIncomingLinksService`).
-- **App Action mapping:** `removeIncomingLinksAppAction` — same logic as Automations should return (`AppActionRemoveLinksOutput`).
-- **HTTP:** health check, count, full unlink, and App Action–shaped invoke endpoint.
+- **Services:** `InboundReferenceService` (count), `RemoveIncomingLinksBatchService` (one batch per HTTP call).
+- **Mappings:** `getIncomingLinksCountActionHandler`, `removeIncomingLinksAppAction` / `removeIncomingLinksActionHandler`.
+- **HTTP:** health, count, batched unlink, App Action–shaped invoke endpoint.
 
-Shared types live in `@archive-helper/shared-types`; recursive field logic in `@archive-helper/utils`.
+Shared types: `@archive-helper/shared-types`. Recursive unlink: `@archive-helper/shared-utils`.
 
 ---
 
 ## 1. Prerequisites
 
 - **Node.js** 18.18+
-- From repo root: `npm install` (workspaces link `@archive-helper/shared-types` and `@archive-helper/utils`).
+- From repo root: `npm install` (workspaces link shared packages).
 - A **Contentful Management API token** with permission to read/update entries in your space.
 
 ---
@@ -28,8 +28,8 @@ From the monorepo root:
 cd contentful-archive-helper
 npm install
 npm run build -w @archive-helper/shared-types
-npm run build -w @archive-helper/utils
-npm run build -w @archive-helper/backend
+npm run build -w @archive-helper/shared-utils
+npm run build -w @archive-helper/backend-standalone
 ```
 
 Or build everything:
@@ -45,15 +45,16 @@ npm run build
 1. Copy the example file:
 
    ```bash
-   cp apps/backend/.env.example apps/backend/.env
+   cp apps/backend-standalone/.env.example apps/backend-standalone/.env
    ```
 
-2. Edit `apps/backend/.env`:
+2. Edit `apps/backend-standalone/.env`:
 
    | Variable | Required | Description |
    |----------|----------|-------------|
    | `CONTENTFUL_MANAGEMENT_TOKEN` | **Yes** | CMA personal access token or integration token (never commit this file). |
    | `PORT` | No | HTTP port (default `3000`). |
+   | `DEFAULT_UNLINK_BATCH_SIZE` | No | When `POST` body omits `batchSize`, use this default (1–100). |
 
 ---
 
@@ -63,13 +64,13 @@ Uses **tsx** so you do not need to rebuild after every change:
 
 ```bash
 # From repo root
-npm run dev -w @archive-helper/backend
+npm run dev -w @archive-helper/backend-standalone
 ```
 
-Or from `apps/backend`:
+Or from `apps/backend-standalone`:
 
 ```bash
-cd apps/backend
+cd apps/backend-standalone
 npm run dev
 ```
 
@@ -82,11 +83,11 @@ You should see a JSON log line like `http.listening` with your port. If the toke
 Build then start with Node:
 
 ```bash
-npm run build -w @archive-helper/backend
-npm run start -w @archive-helper/backend
+npm run build -w @archive-helper/backend-standalone
+npm run start -w @archive-helper/backend-standalone
 ```
 
-This runs `node dist/server.js` (loads `dotenv` from `apps/backend` working directory — run from `apps/backend` or ensure `.env` is discoverable).
+This runs `node dist/server.js` (loads `dotenv`; run from `apps/backend-standalone` or ensure `.env` is discoverable).
 
 ---
 
@@ -98,8 +99,8 @@ Base URL: `http://localhost:<PORT>` (or your deployed host).
 |--------|------|---------|
 | `GET` | `/health` | Liveness: `{ "ok": true }` |
 | `GET` | `/linked-entry-count` | Query: `spaceId`, `environmentId`, `entryId`, optional `previewSize` |
-| `POST` | `/remove-incoming-links` | Full unlink; JSON body = `RemoveIncomingLinksInput`; response includes `targetEntryId` |
-| `POST` | `/app-actions/remove-incoming-links` | Same as App Action contract; body = `InvokeRemoveLinksBody`; response = `AppActionRemoveLinksOutput` |
+| `POST` | `/remove-incoming-links` | **One batch**; body = `RemoveIncomingLinksInput` (`batchSize`, `skip`, …); response = `RemoveIncomingLinksResult` |
+| `POST` | `/app-actions/remove-incoming-links` | Body = `InvokeRemoveLinksBody`; response = full batched result (`hasMore`, `nextSkip`, …) |
 
 ### Example: health
 
@@ -171,7 +172,7 @@ const actionOut = await removeIncomingLinksAppAction(
 );
 ```
 
-See `apps/backend/src/action-entry.ts` for a minimal serverless-style entry idea.
+See `apps/backend-standalone/src/action-entry.ts` for a minimal serverless-style entry idea.
 
 ---
 
@@ -185,18 +186,18 @@ npm run test -w @archive-helper/backend
 
 ## 9. Netlify / static hosts
 
-- **Do not** point Netlify **Functions** at `apps/backend/dist`. Use **`netlify/functions`** (see repo root `netlify.toml`). The backend `dist/` is for Node/Express or App Action executors elsewhere, not one-function-per-file on Netlify.
-- **Declarations:** TypeScript emits **`.d.ts`** to **`apps/backend/dist-types/`**, not next to `.js` in `dist/`, so folders that only package `dist` as functions do not pick up invalid function names from declaration files.
+- **Do not** point Netlify **Functions** at `apps/backend-standalone/dist`. Use **`netlify/functions`** (see repo root `netlify.toml`).
+- **Declarations:** Backend standalone may emit **`.d.ts`** to **`dist-types/`** separately from `dist/`.
 
 ## 10. Troubleshooting
 
 | Issue | What to check |
 |--------|----------------|
-| Server exits on start | `CONTENTFUL_MANAGEMENT_TOKEN` set in `apps/backend/.env` |
+| Server exits on start | `CONTENTFUL_MANAGEMENT_TOKEN` set in `apps/backend-standalone/.env` |
 | `401` / `403` from Contentful | Token scopes and space access |
 | Wrong space/environment | `spaceId` and `environmentId` in query/body match the space you expect |
 | Import errors in a fork | Run `npm run build` for `shared-types` and `utils` before building backend |
-| Netlify: invalid function names `*.d` | Remove `apps/backend/dist` as Functions directory; use `netlify.toml` in repo; clean rebuild so stale `.d.ts` are not in `dist` |
+| Netlify: invalid function names `*.d` | Do not use backend `dist` as Functions directory; use `netlify.toml` in repo |
 
 For **App definition, App Actions, and Automations**, see [Configuration](../CONFIGURATION.md) and [Sidebar how-to](./sidebar.md).
 

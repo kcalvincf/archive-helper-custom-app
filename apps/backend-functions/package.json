@@ -1,0 +1,25 @@
+{
+  "name": "@archive-helper/backend-functions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/removeIncomingLinksAction.js",
+  "types": "dist/removeIncomingLinksAction.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "build:contentful": "npm run build -w @archive-helper/shared-types -w @archive-helper/shared-utils -w @archive-helper/contentful-adapters -w @archive-helper/domain && npx @contentful/app-scripts build-functions --manifest-file ./contentful-app-manifest.json"
+  },
+  "dependencies": {
+    "@archive-helper/contentful-adapters": "*",
+    "@archive-helper/domain": "*",
+    "@archive-helper/shared-types": "*",
+    "@contentful/node-apps-toolkit": "^3.16.1",
+    "contentful-management": "^11.68.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.9"
+  }
+}

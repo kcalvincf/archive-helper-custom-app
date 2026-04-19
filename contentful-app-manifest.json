@@ -1,0 +1,22 @@
+{
+  "functions": [
+    {
+      "id": "getIncomingLinksCount",
+      "name": "Get incoming links count",
+      "description": "Fast inbound link count for a target entry (links_to_entry total). Safe for Automations before batched unlink.",
+      "path": "build/apps/backend-functions/dist/getIncomingLinksCountAction.js",
+      "entryFile": "build/apps/backend-functions/dist/getIncomingLinksCountAction.js",
+      "allowNetworks": [],
+      "accepts": ["appaction.call"]
+    },
+    {
+      "id": "removeIncomingLinks",
+      "name": "Remove incoming links (batched)",
+      "description": "App Action: remove inbound entry references for one batch per invocation (shared domain implementation).",
+      "path": "build/apps/backend-functions/dist/removeIncomingLinksAction.js",
+      "entryFile": "build/apps/backend-functions/dist/removeIncomingLinksAction.js",
+      "allowNetworks": [],
+      "accepts": ["appaction.call"]
+    }
+  ]
+}

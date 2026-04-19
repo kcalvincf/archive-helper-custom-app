@@ -8,13 +8,19 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @archive-helper/shared-types && npm run build -w @archive-helper/utils && npm run build -w @archive-helper/backend && npm run build -w @archive-helper/sidebar",
-    "build:packages": "npm run build -w @archive-helper/shared-types -w @archive-helper/utils",
-    "test": "npm run test -w @archive-helper/utils -w @archive-helper/backend --if-present",
-    "dev:backend": "npm run dev -w @archive-helper/backend",
+    "build": "npm run build -w @archive-helper/shared-types && npm run build -w @archive-helper/shared-utils && npm run build -w @archive-helper/contentful-adapters && npm run build -w @archive-helper/domain && npm run build -w @archive-helper/backend-standalone && npm run build -w @archive-helper/backend-functions && npm run build -w @archive-helper/sidebar",
+    "build:packages": "npm run build -w @archive-helper/shared-types -w @archive-helper/shared-utils -w @archive-helper/contentful-adapters -w @archive-helper/domain",
+    "build:contentful": "npm run build:packages && npm run build -w @archive-helper/sidebar && contentful-app-scripts --ci build-functions --manifest-file ./contentful-app-manifest.json --esbuild-config ./contentful.esbuild.config.cjs && node scripts/stage-contentful-bundle.cjs",
+    "test": "npm run test -w @archive-helper/shared-utils -w @archive-helper/domain -w @archive-helper/backend-standalone -w @archive-helper/backend-functions --if-present",
+    "dev:backend": "npm run dev -w @archive-helper/backend-standalone",
     "dev:sidebar": "npm run dev -w @archive-helper/sidebar"
   },
   "engines": {
     "node": ">=18.18"
+  },
+  "devDependencies": {
+    "@contentful/app-scripts": "^2.5.11",
+    "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
+    "@esbuild-plugins/node-modules-polyfill": "^0.2.2"
   }
 }

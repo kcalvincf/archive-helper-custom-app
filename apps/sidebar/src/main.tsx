@@ -1,7 +1,7 @@
 import { GlobalStyles } from "@contentful/f36-components";
 import { init, locations } from "@contentful/app-sdk";
 import { createRoot } from "react-dom/client";
-import { EntrySidebar } from "./locations/EntrySidebar.js";
+import { IncomingLinksSidebar } from "./locations/IncomingLinksSidebar.js";
 import type { SidebarAppSDK } from "@contentful/app-sdk";
 
 const el = document.getElementById("root");
@@ -13,7 +13,7 @@ init((sdk) => {
     createRoot(el).render(
       <>
         <GlobalStyles />
-        <EntrySidebar sdk={sdk as SidebarAppSDK} />
+        <IncomingLinksSidebar sdk={sdk as SidebarAppSDK} />
       </>,
     );
     return;

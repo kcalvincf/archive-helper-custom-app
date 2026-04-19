@@ -1,0 +1,9 @@
+[
+  {
+    "id": "defaultUnlinkBatchSize",
+    "name": "Default unlink batch size",
+    "description": "When an automation omits batchSize on remove incoming links, use this value (1–100). Falls back to 20 if unset.",
+    "type": "Number",
+    "required": false
+  }
+]

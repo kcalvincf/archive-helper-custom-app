@@ -1,33 +1,21 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
-  "title": "Archive Helper — remove inbound links (result)",
-  "description": "Paste into Contentful App Action 'resultSchema' (JSON Schema draft-04). Validates structured success payload on the App Action call.",
+  "title": "Archive Helper — remove inbound links (result, batched)",
+  "description": "Paste into Contentful App Action 'resultSchema' (JSON Schema draft-04).",
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "totalLinkedEntries": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "CMA total count of entries linking to the target (links_to_entry)."
-    },
-    "scanned": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "Entries processed in this invocation."
-    },
-    "changed": {
-      "type": "integer",
-      "minimum": 0,
-      "description": "Entries that were or would be updated (includes would-change in dry-run)."
-    },
-    "unchanged": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "failed": {
-      "type": "integer",
-      "minimum": 0
-    },
+    "targetEntryId": { "type": "string", "minLength": 1 },
+    "totalLinkedEntries": { "type": "integer", "minimum": 0 },
+    "batchSizeUsed": { "type": "integer", "minimum": 0 },
+    "skipUsed": { "type": "integer", "minimum": 0 },
+    "processedInThisBatch": { "type": "integer", "minimum": 0 },
+    "nextSkip": { "type": "integer", "minimum": 0 },
+    "hasMore": { "type": "boolean" },
+    "remainingEstimate": { "type": "integer", "minimum": 0 },
+    "changed": { "type": "integer", "minimum": 0 },
+    "unchanged": { "type": "integer", "minimum": 0 },
+    "failed": { "type": "integer", "minimum": 0 },
     "results": {
       "type": "array",
       "items": {
@@ -48,8 +36,14 @@
     }
   },
   "required": [
+    "targetEntryId",
     "totalLinkedEntries",
-    "scanned",
+    "batchSizeUsed",
+    "skipUsed",
+    "processedInThisBatch",
+    "nextSkip",
+    "hasMore",
+    "remainingEstimate",
     "changed",
     "unchanged",
     "failed",

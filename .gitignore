@@ -1,6 +1,6 @@
 node_modules/
 dist/
-apps/backend/dist-types/
+apps/backend-standalone/dist-types/
 build/
 coverage/
 .env
