@@ -29,7 +29,7 @@ export function IncomingLinksSidebar({ sdk }: { sdk: SidebarAppSDK }) {
     skip,
     batchSize,
     setBatchSize,
-    resetBatchProgress,
+    // resetBatchProgress,
     previewUnlink,
     removeLinks,
     clearFeedback,
@@ -61,7 +61,7 @@ export function IncomingLinksSidebar({ sdk }: { sdk: SidebarAppSDK }) {
   return (
     <Box padding="spacingM" width="full" style={{ maxWidth: "100%" }}>
       <Stack spacing="spacingM" flexDirection="column" alignItems="stretch">
-        <Subheading>Archive helper</Subheading>
+        <Subheading>Archive Helper</Subheading>
 
         <Box>
           {countState.status === "loading" && (
@@ -75,9 +75,14 @@ export function IncomingLinksSidebar({ sdk }: { sdk: SidebarAppSDK }) {
               <Note variant="negative">{countState.message}</Note>
             </Box>
           )}
-          {countReady && total !== null && (
-            <Text marginTop="spacingS" fontSize="fontSizeXl" fontWeight="fontWeightDemiBold">
-              {total === 0 ? "No inbound entry links" : `${total} links found`}
+          {countReady && total !== null && total === 0 ? 
+          (
+              <Text marginTop="spacingS" fontSize="fontSizeL" fontWeight="fontWeightDemiBold">
+                No inbound entry links
+              </Text>
+          ) : (
+            <Text marginTop="spacingS" fontColor="green600" fontWeight="fontWeightDemiBold">
+                {total} links found
             </Text>
           )}
         </Box>
@@ -96,7 +101,7 @@ export function IncomingLinksSidebar({ sdk }: { sdk: SidebarAppSDK }) {
               }}
             />
             <FormControl.HelpText>
-              Each run processes up to this many linking entries from CMA order (starting at skip {skip}).
+              ** Each run processes {batchSize} links (starting at skip {skip})**
             </FormControl.HelpText>
           </FormControl>
         </Form>
@@ -107,22 +112,22 @@ export function IncomingLinksSidebar({ sdk }: { sdk: SidebarAppSDK }) {
             isDisabled={busy || countState.status === "loading" || !countReady}
             onClick={() => void onPreview()}
           >
-            Preview batch (dry run)
+            Validate Batch
           </Button>
           <Button
             variant="primary"
             isDisabled={busy || countState.status === "loading" || !countReady || total === 0}
             onClick={() => void onExecute()}
           >
-            Remove one batch
+            Remove References
           </Button>
-          <Button variant="transparent" isDisabled={busy} onClick={() => resetBatchProgress()}>
+          {/* <Button variant="transparent" isDisabled={busy} onClick={() => resetBatchProgress()}>
             Reset batch progress (skip → 0)
-          </Button>
-          <Text fontColor="gray600" fontSize="fontSizeS">
+          </Button> */}
+          <Text fontColor="green600" fontSize="fontSizeS" fontWeight="fontWeightDemiBold">
             {republishAfterUnlink
-              ? "Remove batch: updates drafts and republishes entries that were already published."
-              : "Remove batch: saves draft updates only (no automatic publish)."}
+              ? "** AUTO PUBLISH **"
+              : "** NO AUTO PUBLISH **"}
           </Text>
         </Stack>
         {busy && (
